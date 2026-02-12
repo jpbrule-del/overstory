@@ -394,6 +394,7 @@ metrics.db
 metrics.db-wal
 metrics.db-shm
 sessions.json
+merge-queue.json
 agents/
 specs/
 `;

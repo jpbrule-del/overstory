@@ -341,14 +341,14 @@ export async function slingCommand(args: string[]): Promise<void> {
 		pid,
 	};
 
-	process.stdout.write(`🚀 Agent "${name}" launched!\n`);
-	process.stdout.write(`   Task:     ${taskId}\n`);
-	process.stdout.write(`   Branch:   ${branchName}\n`);
-	process.stdout.write(`   Worktree: ${worktreePath}\n`);
-	process.stdout.write(`   Tmux:     ${tmuxSessionName}\n`);
-	process.stdout.write(`   PID:      ${pid}\n`);
-
-	if (process.argv.includes("--json")) {
+	if (args.includes("--json")) {
 		process.stdout.write(`${JSON.stringify(output)}\n`);
+	} else {
+		process.stdout.write(`🚀 Agent "${name}" launched!\n`);
+		process.stdout.write(`   Task:     ${taskId}\n`);
+		process.stdout.write(`   Branch:   ${branchName}\n`);
+		process.stdout.write(`   Worktree: ${worktreePath}\n`);
+		process.stdout.write(`   Tmux:     ${tmuxSessionName}\n`);
+		process.stdout.write(`   PID:      ${pid}\n`);
 	}
 }

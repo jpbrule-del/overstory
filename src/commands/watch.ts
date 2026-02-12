@@ -2,10 +2,13 @@
  * CLI command: overstory watch [--interval <ms>] [--background]
  *
  * Starts the watchdog daemon. Foreground mode shows real-time status.
- * Background mode daemonizes. Interval configurable, default 30000ms.
+ * Background mode spawns a detached process via Bun.spawn and writes a PID file.
+ * Interval configurable, default 30000ms.
  */
 
+import { join } from "node:path";
 import { loadConfig } from "../config.ts";
+import { OverstoryError } from "../errors.ts";
 import type { HealthCheck } from "../types.ts";
 import { startDaemon } from "../watchdog/daemon.ts";
 
@@ -30,6 +33,94 @@ function hasFlag(args: string[], flag: string): boolean {
 function formatCheck(check: HealthCheck): string {
 	const actionIcon = check.action === "terminate" ? "💀" : check.action === "escalate" ? "⚠️" : "✅";
 	return `${actionIcon} ${check.agentName}: ${check.state} (tmux=${check.tmuxAlive ? "up" : "down"}, pid=${check.processAlive ? "up" : "down"})`;
+}
+
+/**
+ * Check whether a process with the given PID is still running.
+ */
+function isProcessRunning(pid: number): boolean {
+	try {
+		// Signal 0 doesn't kill the process — just checks if it exists
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Read the PID from the watchdog PID file.
+ * Returns null if the file doesn't exist or can't be parsed.
+ */
+async function readPidFile(pidFilePath: string): Promise<number | null> {
+	const file = Bun.file(pidFilePath);
+	const exists = await file.exists();
+	if (!exists) {
+		return null;
+	}
+
+	try {
+		const text = await file.text();
+		const pid = Number.parseInt(text.trim(), 10);
+		if (Number.isNaN(pid) || pid <= 0) {
+			return null;
+		}
+		return pid;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Write a PID to the watchdog PID file.
+ */
+async function writePidFile(pidFilePath: string, pid: number): Promise<void> {
+	await Bun.write(pidFilePath, `${pid}\n`);
+}
+
+/**
+ * Remove the watchdog PID file.
+ */
+async function removePidFile(pidFilePath: string): Promise<void> {
+	const { unlink } = await import("node:fs/promises");
+	try {
+		await unlink(pidFilePath);
+	} catch {
+		// File may already be gone — not an error
+	}
+}
+
+/**
+ * Resolve the path to the overstory binary for re-launching.
+ * Uses `which overstory` first, then falls back to process.argv.
+ */
+async function resolveOverstoryBin(): Promise<string> {
+	try {
+		const proc = Bun.spawn(["which", "overstory"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const exitCode = await proc.exited;
+		if (exitCode === 0) {
+			const binPath = (await new Response(proc.stdout).text()).trim();
+			if (binPath.length > 0) {
+				return binPath;
+			}
+		}
+	} catch {
+		// which not available or overstory not on PATH
+	}
+
+	// Fallback: use the script that's currently running (process.argv[1])
+	const scriptPath = process.argv[1];
+	if (scriptPath) {
+		return scriptPath;
+	}
+
+	throw new OverstoryError(
+		"Cannot resolve overstory binary path for background launch",
+		"WATCH_ERROR",
+	);
 }
 
 /**
@@ -62,22 +153,62 @@ export async function watchCommand(args: string[]): Promise<void> {
 
 	const staleThresholdMs = config.watchdog.staleThresholdMs;
 	const zombieThresholdMs = config.watchdog.zombieThresholdMs;
+	const pidFilePath = join(config.project.root, ".overstory", "watchdog.pid");
 
 	if (background) {
-		// In background mode, start daemon silently and detach
-		startDaemon({
-			root: config.project.root,
-			intervalMs,
-			staleThresholdMs,
-			zombieThresholdMs,
+		// Check if a watchdog is already running
+		const existingPid = await readPidFile(pidFilePath);
+		if (existingPid !== null && isProcessRunning(existingPid)) {
+			process.stdout.write(
+				`Watchdog already running (PID: ${existingPid}). ` +
+					`Kill it first or remove ${pidFilePath}\n`,
+			);
+			return;
+		}
+
+		// Clean up stale PID file if process is no longer running
+		if (existingPid !== null) {
+			await removePidFile(pidFilePath);
+		}
+
+		// Build the args for the child process, forwarding --interval but not --background
+		const childArgs: string[] = ["watch"];
+		if (intervalStr) {
+			childArgs.push("--interval", intervalStr);
+		}
+
+		// Resolve the overstory binary path
+		const overstoryBin = await resolveOverstoryBin();
+
+		// Spawn a detached background process running `overstory watch` (without --background)
+		const child = Bun.spawn(["bun", "run", overstoryBin, ...childArgs], {
+			cwd,
+			stdout: "ignore",
+			stderr: "ignore",
+			stdin: "ignore",
 		});
-		process.stdout.write(`👁️  Watchdog started in background (interval: ${intervalMs}ms)\n`);
+
+		// Unref the child so the parent can exit without waiting for it
+		child.unref();
+
+		const childPid = child.pid;
+
+		// Write PID file for later cleanup
+		await writePidFile(pidFilePath, childPid);
+
+		process.stdout.write(
+			`Watchdog started in background (PID: ${childPid}, interval: ${intervalMs}ms)\n`,
+		);
+		process.stdout.write(`PID file: ${pidFilePath}\n`);
 		return;
 	}
 
 	// Foreground mode: show real-time health checks
-	process.stdout.write(`👁️  Watchdog running (interval: ${intervalMs}ms)\n`);
+	process.stdout.write(`Watchdog running (interval: ${intervalMs}ms)\n`);
 	process.stdout.write("Press Ctrl+C to stop.\n\n");
+
+	// Write PID file so `--background` check and external tools can find us
+	await writePidFile(pidFilePath, process.pid);
 
 	const { stop } = startDaemon({
 		root: config.project.root,
@@ -93,8 +224,11 @@ export async function watchCommand(args: string[]): Promise<void> {
 	// Keep running until interrupted
 	process.on("SIGINT", () => {
 		stop();
-		process.stdout.write("\n👁️  Watchdog stopped.\n");
-		process.exit(0);
+		// Clean up PID file on graceful shutdown
+		removePidFile(pidFilePath).finally(() => {
+			process.stdout.write("\nWatchdog stopped.\n");
+			process.exit(0);
+		});
 	});
 
 	// Block forever
