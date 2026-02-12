@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { ConfigError, ValidationError } from "./errors.ts";
 import type { OverstoryConfig } from "./types.ts";
 
@@ -319,23 +319,73 @@ function validateConfig(config: OverstoryConfig): void {
 }
 
 /**
+ * Resolve the actual project root, handling git worktrees.
+ *
+ * When running from inside a git worktree (e.g., an agent's worktree at
+ * `.overstory/worktrees/{name}/`), the passed directory won't contain
+ * `.overstory/config.yaml`. This function detects worktrees using
+ * `git rev-parse --git-common-dir` and resolves to the main repository root.
+ *
+ * @param startDir - The initial directory (usually process.cwd())
+ * @returns The resolved project root containing `.overstory/`
+ */
+async function resolveProjectRoot(startDir: string): Promise<string> {
+	const { existsSync } = require("node:fs") as typeof import("node:fs");
+
+	// If .overstory/config.yaml exists here, we're in the right place
+	if (existsSync(join(startDir, OVERSTORY_DIR, CONFIG_FILENAME))) {
+		return startDir;
+	}
+
+	// We might be inside a git worktree. Find the main repo root
+	// via git's common dir (points to the shared .git directory).
+	try {
+		const proc = Bun.spawn(["git", "rev-parse", "--git-common-dir"], {
+			cwd: startDir,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const exitCode = await proc.exited;
+		if (exitCode === 0) {
+			const gitCommonDir = (await new Response(proc.stdout).text()).trim();
+			const absGitCommon = resolve(startDir, gitCommonDir);
+			// Main repo root is the parent of the .git directory
+			const mainRoot = dirname(absGitCommon);
+			if (existsSync(join(mainRoot, OVERSTORY_DIR, CONFIG_FILENAME))) {
+				return mainRoot;
+			}
+		}
+	} catch {
+		// git not available, fall through
+	}
+
+	// Fallback to the start directory
+	return startDir;
+}
+
+/**
  * Load the overstory configuration for a project.
  *
  * Reads `.overstory/config.yaml` from the project root, parses it,
  * merges with defaults, and validates the result.
  *
- * @param projectRoot - Absolute path to the target project root
+ * Automatically resolves the project root when running inside a git worktree.
+ *
+ * @param projectRoot - Absolute path to the target project root (or worktree)
  * @returns Fully populated and validated OverstoryConfig
  * @throws ConfigError if the file cannot be read or parsed
  * @throws ValidationError if the merged config fails validation
  */
 export async function loadConfig(projectRoot: string): Promise<OverstoryConfig> {
-	const configPath = join(projectRoot, OVERSTORY_DIR, CONFIG_FILENAME);
+	// Resolve the actual project root (handles git worktrees)
+	const resolvedRoot = await resolveProjectRoot(projectRoot);
+
+	const configPath = join(resolvedRoot, OVERSTORY_DIR, CONFIG_FILENAME);
 
 	// Start with defaults, setting the project root
 	const defaults = structuredClone(DEFAULT_CONFIG);
-	defaults.project.root = projectRoot;
-	defaults.project.name = projectRoot.split("/").pop() ?? "unknown";
+	defaults.project.root = resolvedRoot;
+	defaults.project.name = resolvedRoot.split("/").pop() ?? "unknown";
 
 	// Try to read the config file
 	const file = Bun.file(configPath);
@@ -373,8 +423,8 @@ export async function loadConfig(projectRoot: string): Promise<OverstoryConfig> 
 		parsed,
 	) as unknown as OverstoryConfig;
 
-	// Ensure project.root is always set to the actual projectRoot
-	merged.project.root = projectRoot;
+	// Ensure project.root is always set to the resolved project root
+	merged.project.root = resolvedRoot;
 
 	validateConfig(merged);
 

@@ -118,9 +118,9 @@ async function handleClean(args: string[], root: string, json: boolean): Promise
 			}
 		}
 
-		// Remove worktree
+		// Remove worktree (force when --all to handle untracked files)
 		try {
-			await removeWorktree(root, wt.path);
+			await removeWorktree(root, wt.path, { force: all });
 			cleaned.push(wt.branch);
 
 			if (!json) {
@@ -159,7 +159,26 @@ async function handleClean(args: string[], root: string, json: boolean): Promise
  *
  * Subcommands: list, clean.
  */
+const WORKTREE_HELP = `overstory worktree — Manage agent worktrees
+
+Usage: overstory worktree <subcommand> [flags]
+
+Subcommands:
+  list               List worktrees with agent status
+  clean              Remove completed worktrees
+                       [--completed]  Only finished agents (default)
+                       [--all]        Force remove all
+
+Options:
+  --json             Output as JSON
+  --help, -h         Show this help`;
+
 export async function worktreeCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${WORKTREE_HELP}\n`);
+		return;
+	}
+
 	const subcommand = args[0];
 	const subArgs = args.slice(1);
 	const jsonFlag = hasFlag(args, "--json");

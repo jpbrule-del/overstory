@@ -136,14 +136,22 @@ export async function listWorktrees(
  * attempts `git branch -d {branch}` to delete the branch (only succeeds
  * if the branch has been merged; unmerged branches are left intact).
  */
-export async function removeWorktree(repoRoot: string, path: string): Promise<void> {
+export async function removeWorktree(
+	repoRoot: string,
+	path: string,
+	options?: { force?: boolean },
+): Promise<void> {
 	// First, figure out which branch this worktree is on so we can clean it up
 	const worktrees = await listWorktrees(repoRoot);
 	const entry = worktrees.find((wt) => wt.path === path);
 	const branchName = entry?.branch ?? "";
 
-	// Remove the worktree
-	await runGit(repoRoot, ["worktree", "remove", path], {
+	// Remove the worktree (--force handles untracked files and uncommitted changes)
+	const removeArgs = ["worktree", "remove", path];
+	if (options?.force) {
+		removeArgs.push("--force");
+	}
+	await runGit(repoRoot, removeArgs, {
 		worktreePath: path,
 		branchName,
 	});

@@ -197,7 +197,33 @@ function handleReply(args: string[], cwd: string): void {
  *
  * Subcommands: send, check, list, read, reply.
  */
+const MAIL_HELP = `overstory mail — Agent messaging system
+
+Usage: overstory mail <subcommand> [args...]
+
+Subcommands:
+  send     Send a message
+             --to <agent>  --subject <text>  --body <text>
+             [--from <name>] [--type <status|question|result|error>]
+             [--priority <low|normal|high|urgent>] [--json]
+  check    Check inbox (unread messages)
+             [--agent <name>] [--inject] [--json]
+  list     List messages with filters
+             [--from <name>] [--to <name>] [--unread] [--json]
+  read     Mark a message as read
+             <message-id>
+  reply    Reply to a message
+             <message-id> --body <text> [--from <name>] [--json]
+
+Options:
+  --help, -h   Show this help`;
+
 export async function mailCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${MAIL_HELP}\n`);
+		return;
+	}
+
 	const subcommand = args[0];
 	const subArgs = args.slice(1);
 	const cwd = process.cwd();

@@ -42,7 +42,21 @@ function formatDuration(ms: number): string {
 /**
  * Entry point for `overstory metrics [--last <n>] [--json]`.
  */
+const METRICS_HELP = `overstory metrics — Show session metrics
+
+Usage: overstory metrics [--last <n>] [--json]
+
+Options:
+  --last <n>         Number of recent sessions to show (default: 20)
+  --json             Output as JSON
+  --help, -h         Show this help`;
+
 export async function metricsCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${METRICS_HELP}\n`);
+		return;
+	}
+
 	const lastStr = getFlag(args, "--last");
 	const limit = lastStr ? Number.parseInt(lastStr, 10) : 20;
 	const json = hasFlag(args, "--json");

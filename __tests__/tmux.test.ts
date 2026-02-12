@@ -43,16 +43,20 @@ describe("createSession", () => {
 		spawnSpy.mockRestore();
 	});
 
-	test("creates session and returns PID", async () => {
+	test("creates session and returns pane PID", async () => {
 		let callCount = 0;
 		spawnSpy.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
+				// which overstory — return a bin path
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			if (callCount === 2) {
 				// tmux new-session
 				return mockSpawnResult("", "", 0);
 			}
-			// tmux list-sessions
-			return mockSpawnResult("overstory-auth:42\noverstory-data:99\n", "", 0);
+			// tmux list-panes -t overstory-auth -F '#{pane_pid}'
+			return mockSpawnResult("42\n", "", 0);
 		});
 
 		const pid = await createSession(
@@ -64,90 +68,124 @@ describe("createSession", () => {
 		expect(pid).toBe(42);
 	});
 
-	test("passes correct args to tmux new-session", async () => {
+	test("passes correct args to tmux new-session with PATH wrapping", async () => {
 		let callCount = 0;
 		spawnSpy.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			if (callCount === 2) {
 				return mockSpawnResult("", "", 0);
 			}
-			return mockSpawnResult("my-session:1234\n", "", 0);
+			return mockSpawnResult("1234\n", "", 0);
 		});
 
 		await createSession("my-session", "/work/dir", "echo hello");
 
-		const firstCallArgs = spawnSpy.mock.calls[0] as unknown[];
-		const cmd = firstCallArgs[0] as string[];
-		expect(cmd).toEqual([
-			"tmux",
-			"new-session",
-			"-d",
-			"-s",
-			"my-session",
-			"-c",
-			"/work/dir",
-			"echo hello",
-		]);
+		// Call 0 is 'which overstory', call 1 is 'tmux new-session'
+		const tmuxCallArgs = spawnSpy.mock.calls[1] as unknown[];
+		const cmd = tmuxCallArgs[0] as string[];
+		expect(cmd[0]).toBe("tmux");
+		expect(cmd[1]).toBe("new-session");
+		expect(cmd[3]).toBe("-s");
+		expect(cmd[4]).toBe("my-session");
+		expect(cmd[5]).toBe("-c");
+		expect(cmd[6]).toBe("/work/dir");
+		// The command should be wrapped with PATH export
+		const wrappedCmd = cmd[7] as string;
+		expect(wrappedCmd).toContain("echo hello");
+		expect(wrappedCmd).toContain("export PATH=");
 
-		const opts = firstCallArgs[1] as { cwd: string };
+		const opts = tmuxCallArgs[1] as { cwd: string };
 		expect(opts.cwd).toBe("/work/dir");
 	});
 
-	test("calls list-sessions after creating to get PID", async () => {
+	test("calls list-panes after creating to get pane PID", async () => {
 		let callCount = 0;
 		spawnSpy.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			if (callCount === 2) {
 				return mockSpawnResult("", "", 0);
 			}
-			return mockSpawnResult("test-agent:7777\n", "", 0);
+			return mockSpawnResult("7777\n", "", 0);
 		});
 
 		await createSession("test-agent", "/tmp", "ls");
 
-		expect(spawnSpy).toHaveBeenCalledTimes(2);
-		const secondCallArgs = spawnSpy.mock.calls[1] as unknown[];
-		const cmd = secondCallArgs[0] as string[];
-		expect(cmd).toEqual(["tmux", "list-sessions", "-F", "#{session_name}:#{pid}"]);
+		// 3 calls: which overstory, tmux new-session, tmux list-panes
+		expect(spawnSpy).toHaveBeenCalledTimes(3);
+		const thirdCallArgs = spawnSpy.mock.calls[2] as unknown[];
+		const cmd = thirdCallArgs[0] as string[];
+		expect(cmd).toEqual(["tmux", "list-panes", "-t", "test-agent", "-F", "#{pane_pid}"]);
 	});
 
 	test("throws AgentError if session creation fails", async () => {
-		spawnSpy.mockImplementation(() => mockSpawnResult("", "duplicate session: my-session", 1));
-
-		await expect(createSession("my-session", "/tmp", "ls")).rejects.toThrow(AgentError);
-	});
-
-	test("throws AgentError if list-sessions fails after creation", async () => {
 		let callCount = 0;
 		spawnSpy.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
-				// new-session succeeds
-				return mockSpawnResult("", "", 0);
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
 			}
-			// list-sessions fails
-			return mockSpawnResult("", "error listing sessions", 1);
+			return mockSpawnResult("", "duplicate session: my-session", 1);
 		});
 
 		await expect(createSession("my-session", "/tmp", "ls")).rejects.toThrow(AgentError);
 	});
 
-	test("throws AgentError if session PID not found in list", async () => {
+	test("throws AgentError if list-panes fails after creation", async () => {
 		let callCount = 0;
 		spawnSpy.mockImplementation(() => {
 			callCount++;
 			if (callCount === 1) {
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			if (callCount === 2) {
+				// new-session succeeds
 				return mockSpawnResult("", "", 0);
 			}
-			// List returns sessions but not the one we created
-			return mockSpawnResult("other-session:999\n", "", 0);
+			// list-panes fails
+			return mockSpawnResult("", "error listing panes", 1);
+		});
+
+		await expect(createSession("my-session", "/tmp", "ls")).rejects.toThrow(AgentError);
+	});
+
+	test("throws AgentError if pane PID output is empty", async () => {
+		let callCount = 0;
+		spawnSpy.mockImplementation(() => {
+			callCount++;
+			if (callCount === 1) {
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			if (callCount === 2) {
+				return mockSpawnResult("", "", 0);
+			}
+			// list-panes returns empty output
+			return mockSpawnResult("", "", 0);
 		});
 
 		await expect(createSession("my-session", "/tmp", "ls")).rejects.toThrow(AgentError);
 	});
 
 	test("AgentError includes session name context", async () => {
-		spawnSpy.mockImplementation(() => mockSpawnResult("", "duplicate session: agent-foo", 1));
+		let callCount = 0;
+		spawnSpy.mockImplementation(() => {
+			callCount++;
+			if (callCount === 1) {
+				// which overstory
+				return mockSpawnResult("/usr/local/bin/overstory\n", "", 0);
+			}
+			return mockSpawnResult("", "duplicate session: agent-foo", 1);
+		});
 
 		try {
 			await createSession("agent-foo", "/tmp", "ls");
@@ -158,6 +196,32 @@ describe("createSession", () => {
 			expect(agentErr.message).toContain("agent-foo");
 			expect(agentErr.agentName).toBe("agent-foo");
 		}
+	});
+
+	test("still creates session when which overstory fails (uses fallback)", async () => {
+		let callCount = 0;
+		spawnSpy.mockImplementation(() => {
+			callCount++;
+			if (callCount === 1) {
+				// which overstory fails
+				return mockSpawnResult("", "overstory not found", 1);
+			}
+			if (callCount === 2) {
+				// tmux new-session
+				return mockSpawnResult("", "", 0);
+			}
+			// tmux list-panes
+			return mockSpawnResult("5555\n", "", 0);
+		});
+
+		const pid = await createSession("fallback-agent", "/tmp", "echo test");
+		expect(pid).toBe(5555);
+
+		// The tmux command should contain the original command
+		const tmuxCallArgs = spawnSpy.mock.calls[1] as unknown[];
+		const cmd = tmuxCallArgs[0] as string[];
+		const tmuxCmd = cmd[7] as string;
+		expect(tmuxCmd).toContain("echo test");
 	});
 });
 

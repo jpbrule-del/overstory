@@ -83,6 +83,29 @@ async function gatherStatus(root: string): Promise<StatusData> {
 		// tmux might not be running
 	}
 
+	// Reconcile agent states: if tmux session is dead but agent state
+	// indicates it should be alive, mark it as zombie
+	let sessionsUpdated = false;
+	for (const session of sessions) {
+		if (session.state === "booting" || session.state === "working") {
+			const tmuxAlive = tmuxSessions.some((s) => s.name === session.tmuxSession);
+			if (!tmuxAlive) {
+				session.state = "zombie";
+				sessionsUpdated = true;
+			}
+		}
+	}
+
+	// Persist reconciled state so it doesn't re-appear as booting/working next time
+	if (sessionsUpdated) {
+		try {
+			const sessionsPath = join(root, ".overstory", "sessions.json");
+			await Bun.write(sessionsPath, JSON.stringify(sessions, null, "\t"));
+		} catch {
+			// Best effort: don't fail status display if write fails
+		}
+	}
+
 	let unreadMailCount = 0;
 	try {
 		const mailDbPath = join(root, ".overstory", "mail.db");
@@ -183,7 +206,22 @@ function printStatus(data: StatusData): void {
 /**
  * Entry point for `overstory status [--json] [--watch]`.
  */
+const STATUS_HELP = `overstory status — Show all active agents and project state
+
+Usage: overstory status [--json] [--watch] [--interval <ms>]
+
+Options:
+  --json             Output as JSON
+  --watch            Live updating mode (polling)
+  --interval <ms>    Poll interval in milliseconds (default: 3000)
+  --help, -h         Show this help`;
+
 export async function statusCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${STATUS_HELP}\n`);
+		return;
+	}
+
 	const json = hasFlag(args, "--json");
 	const watch = hasFlag(args, "--watch");
 	const intervalStr = getFlag(args, "--interval");

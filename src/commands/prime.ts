@@ -106,7 +106,21 @@ function formatIdentity(identity: AgentIdentity): string {
  *
  * @param args - CLI arguments after "prime" subcommand
  */
+const PRIME_HELP = `overstory prime — Load context for orchestrator/agent
+
+Usage: overstory prime [--agent <name>] [--compact]
+
+Options:
+  --agent <name>   Prime for a specific agent (default: orchestrator)
+  --compact        Output reduced context (for PreCompact hook)
+  --help, -h       Show this help`;
+
 export async function primeCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${PRIME_HELP}\n`);
+		return;
+	}
+
 	const { agentName, compact } = parseArgs(args);
 
 	// 1. Load config

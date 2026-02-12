@@ -73,7 +73,29 @@ async function saveSessions(sessionsPath: string, sessions: AgentSession[]): Pro
  *   --parent <agent-name>  Parent agent (for hierarchy tracking)
  *   --depth <n>            Current hierarchy depth (default 0)
  */
+const SLING_HELP = `overstory sling — Spawn a worker agent
+
+Usage: overstory sling <task-id> [flags]
+
+Arguments:
+  <task-id>                  Beads task ID to assign
+
+Options:
+  --capability <type>        Agent type: builder | scout | reviewer | lead | merger (default: builder)
+  --name <name>              Unique agent name (required)
+  --spec <path>              Path to task spec file
+  --files <f1,f2,...>        Exclusive file scope (comma-separated)
+  --parent <agent-name>      Parent agent for hierarchy tracking
+  --depth <n>                Current hierarchy depth (default: 0)
+  --json                     Output result as JSON
+  --help, -h                 Show this help`;
+
 export async function slingCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${SLING_HELP}\n`);
+		return;
+	}
+
 	const taskId = args.find((a) => !a.startsWith("--"));
 	if (!taskId) {
 		throw new ValidationError("Task ID is required: overstory sling <task-id>", {
@@ -129,9 +151,18 @@ export async function slingCommand(args: string[]): Promise<void> {
 		);
 	}
 
-	// 4. Check name uniqueness against active sessions
+	// 4. Check name uniqueness and concurrency limit against active sessions
 	const sessionsPath = join(config.project.root, ".overstory", "sessions.json");
 	const sessions = await loadSessions(sessionsPath);
+
+	const activeSessions = sessions.filter((s) => s.state !== "zombie");
+	if (activeSessions.length >= config.agents.maxConcurrent) {
+		throw new AgentError(
+			`Max concurrent agent limit reached: ${activeSessions.length}/${config.agents.maxConcurrent} active agents`,
+			{ agentName: name },
+		);
+	}
+
 	const existing = sessions.find((s) => s.agentName === name && s.state !== "zombie");
 	if (existing) {
 		throw new AgentError(`Agent name "${name}" is already in use (state: ${existing.state})`, {

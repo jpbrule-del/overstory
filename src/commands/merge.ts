@@ -140,7 +140,23 @@ function formatDryRun(entry: MergeEntry): string {
  *   --dry-run        Check for conflicts without actually merging
  *   --json           Output results as JSON
  */
+const MERGE_HELP = `overstory merge — Merge agent branches into canonical
+
+Usage: overstory merge --branch <name> | --all [--dry-run] [--json]
+
+Options:
+  --branch <name>   Merge a specific branch
+  --all             Merge all pending branches in the queue
+  --dry-run         Check for conflicts without actually merging
+  --json            Output results as JSON
+  --help, -h        Show this help`;
+
 export async function mergeCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${MERGE_HELP}\n`);
+		return;
+	}
+
 	const branchName = getFlag(args, "--branch");
 	const all = hasFlag(args, "--all");
 	const dryRun = hasFlag(args, "--dry-run");

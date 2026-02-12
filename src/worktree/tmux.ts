@@ -5,7 +5,50 @@
  * Session naming convention: `overstory-{agentName}`.
  */
 
+import { dirname, resolve } from "node:path";
 import { AgentError } from "../errors.ts";
+
+/**
+ * Detect the directory containing the overstory binary.
+ *
+ * Checks process.argv[0] first (the bun/node executable path won't help,
+ * but process.argv[1] is the script path for `bun run`), then falls back
+ * to `which overstory` to find it on the current PATH.
+ *
+ * Returns null if detection fails.
+ */
+async function detectOverstoryBinDir(): Promise<string | null> {
+	// process.argv[1] is the script entry point (e.g., /path/to/overstory/src/index.ts)
+	// The overstory binary (bun link) resolves to a bin dir
+	// Try `which overstory` for the most reliable result
+	try {
+		const proc = Bun.spawn(["which", "overstory"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const exitCode = await proc.exited;
+		if (exitCode === 0) {
+			const binPath = (await new Response(proc.stdout).text()).trim();
+			if (binPath.length > 0) {
+				return dirname(resolve(binPath));
+			}
+		}
+	} catch {
+		// which not available or overstory not on PATH
+	}
+
+	// Fallback: if process.argv[1] points to overstory's own entry point (src/index.ts),
+	// derive the bin dir from the bun binary that's running it
+	const scriptPath = process.argv[1];
+	if (scriptPath?.includes("overstory")) {
+		const bunPath = process.argv[0];
+		if (bunPath) {
+			return dirname(resolve(bunPath));
+		}
+	}
+
+	return null;
+}
 
 /**
  * Run a shell command and capture its output.
@@ -35,8 +78,16 @@ async function runCommand(
  * @throws AgentError if tmux is not installed or session creation fails
  */
 export async function createSession(name: string, cwd: string, command: string): Promise<number> {
+	// Ensure the tmux session's PATH includes the overstory binary directory
+	// so that hooks calling `overstory` inside the session can find it
+	const overstoryBinDir = await detectOverstoryBinDir();
+	let wrappedCommand = command;
+	if (overstoryBinDir) {
+		wrappedCommand = `export PATH="${overstoryBinDir}:$PATH" && ${command}`;
+	}
+
 	const { exitCode, stderr } = await runCommand(
-		["tmux", "new-session", "-d", "-s", name, "-c", cwd, command],
+		["tmux", "new-session", "-d", "-s", name, "-c", cwd, wrappedCommand],
 		cwd,
 	);
 
@@ -46,8 +97,8 @@ export async function createSession(name: string, cwd: string, command: string):
 		});
 	}
 
-	// Retrieve the PID for the newly created session
-	const pidResult = await runCommand(["tmux", "list-sessions", "-F", "#{session_name}:#{pid}"]);
+	// Retrieve the actual PID of the process running inside the tmux pane
+	const pidResult = await runCommand(["tmux", "list-panes", "-t", name, "-F", "#{pane_pid}"]);
 
 	if (pidResult.exitCode !== 0) {
 		throw new AgentError(
@@ -56,24 +107,17 @@ export async function createSession(name: string, cwd: string, command: string):
 		);
 	}
 
-	const lines = pidResult.stdout.trim().split("\n");
-	for (const line of lines) {
-		const sepIndex = line.indexOf(":");
-		if (sepIndex === -1) continue;
-		const sessionName = line.slice(0, sepIndex);
-		const pidStr = line.slice(sepIndex + 1);
-		if (sessionName === name && pidStr) {
-			const pid = Number.parseInt(pidStr, 10);
-			if (!Number.isNaN(pid)) {
-				return pid;
-			}
+	const pidStr = pidResult.stdout.trim().split("\n")[0];
+	if (pidStr) {
+		const pid = Number.parseInt(pidStr, 10);
+		if (!Number.isNaN(pid)) {
+			return pid;
 		}
 	}
 
-	throw new AgentError(
-		`Created tmux session "${name}" but could not find its PID in session list`,
-		{ agentName: name },
-	);
+	throw new AgentError(`Created tmux session "${name}" but could not find its pane PID`, {
+		agentName: name,
+	});
 }
 
 /**

@@ -7,9 +7,11 @@
  */
 
 import { join } from "node:path";
+import { updateIdentity } from "../agents/identity.ts";
 import { loadConfig } from "../config.ts";
 import { ValidationError } from "../errors.ts";
 import { createLogger } from "../logging/logger.ts";
+import type { AgentSession } from "../types.ts";
 
 /**
  * Parse a named flag value from args.
@@ -48,9 +50,66 @@ async function getSessionDir(logsBase: string, agentName: string): Promise<strin
 }
 
 /**
+ * Update the lastActivity timestamp for an agent in sessions.json.
+ * Non-fatal: silently ignores errors to avoid breaking hook execution.
+ */
+async function updateLastActivity(projectRoot: string, agentName: string): Promise<void> {
+	const sessionsPath = join(projectRoot, ".overstory", "sessions.json");
+	const file = Bun.file(sessionsPath);
+	if (!(await file.exists())) return;
+
+	try {
+		const text = await file.text();
+		const sessions = JSON.parse(text) as AgentSession[];
+		const session = sessions.find((s) => s.agentName === agentName);
+		if (session) {
+			session.lastActivity = new Date().toISOString();
+			await Bun.write(sessionsPath, JSON.stringify(sessions, null, "\t"));
+		}
+	} catch {
+		// Non-fatal: don't break logging if session update fails
+	}
+}
+
+/**
+ * Look up an agent's session to get its beadId.
+ * Returns null if not found.
+ */
+async function getAgentBeadId(projectRoot: string, agentName: string): Promise<string | null> {
+	const sessionsPath = join(projectRoot, ".overstory", "sessions.json");
+	const file = Bun.file(sessionsPath);
+	if (!(await file.exists())) return null;
+
+	try {
+		const text = await file.text();
+		const sessions = JSON.parse(text) as AgentSession[];
+		const session = sessions.find((s) => s.agentName === agentName);
+		return session?.beadId ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Entry point for `overstory log <event> --agent <name>`.
  */
+const LOG_HELP = `overstory log — Log a hook event
+
+Usage: overstory log <event> --agent <name>
+
+Arguments:
+  <event>            Event type: tool-start, tool-end, session-end
+
+Options:
+  --agent <name>     Agent name (required)
+  --help, -h         Show this help`;
+
 export async function logCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${LOG_HELP}\n`);
+		return;
+	}
+
 	const event = args.find((a) => !a.startsWith("--"));
 	const agentName = getFlag(args, "--agent");
 
@@ -89,12 +148,27 @@ export async function logCommand(args: string[]): Promise<void> {
 	switch (event) {
 		case "tool-start":
 			logger.toolStart("hook-captured", {});
+			await updateLastActivity(config.project.root, agentName);
 			break;
 		case "tool-end":
 			logger.toolEnd("hook-captured", 0);
+			await updateLastActivity(config.project.root, agentName);
 			break;
 		case "session-end":
 			logger.info("session.end", { agentName });
+			// Update agent identity with completed session
+			{
+				const identityBaseDir = join(config.project.root, ".overstory", "agents");
+				const beadId = await getAgentBeadId(config.project.root, agentName);
+				try {
+					await updateIdentity(identityBaseDir, agentName, {
+						sessionsCompleted: 1,
+						completedTask: beadId ? { beadId, summary: `Completed task ${beadId}` } : undefined,
+					});
+				} catch {
+					// Non-fatal: identity may not exist for this agent
+				}
+			}
 			// Clear the current session marker
 			{
 				const markerPath = join(logsBase, agentName, ".current-session");

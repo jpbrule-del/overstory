@@ -12,6 +12,7 @@
 import { mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { DEFAULT_CONFIG } from "../config.ts";
+import { ValidationError } from "../errors.ts";
 import type { AgentManifest, OverstoryConfig } from "../types.ts";
 
 const OVERSTORY_DIR = ".overstory";
@@ -387,10 +388,36 @@ function printSkipped(relativePath: string, reason: string): void {
  *
  * @param args - CLI arguments after "init" subcommand
  */
+const INIT_HELP = `overstory init — Initialize .overstory/ in current project
+
+Usage: overstory init [--force]
+
+Options:
+  --force      Reinitialize even if .overstory/ already exists
+  --help, -h   Show this help`;
+
 export async function initCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${INIT_HELP}\n`);
+		return;
+	}
+
 	const force = args.includes("--force");
 	const projectRoot = process.cwd();
 	const overstoryPath = join(projectRoot, OVERSTORY_DIR);
+
+	// 0. Verify we're inside a git repository
+	const gitCheck = Bun.spawn(["git", "rev-parse", "--is-inside-work-tree"], {
+		cwd: projectRoot,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const gitCheckExit = await gitCheck.exited;
+	if (gitCheckExit !== 0) {
+		throw new ValidationError("overstory requires a git repository. Run 'git init' first.", {
+			field: "git",
+		});
+	}
 
 	// 1. Check if .overstory/ already exists
 	const existingDir = Bun.file(join(overstoryPath, "config.yaml"));

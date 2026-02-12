@@ -35,7 +35,21 @@ function formatCheck(check: HealthCheck): string {
 /**
  * Entry point for `overstory watch [--interval <ms>] [--background]`.
  */
+const WATCH_HELP = `overstory watch — Start watchdog daemon
+
+Usage: overstory watch [--interval <ms>] [--background]
+
+Options:
+  --interval <ms>    Health check interval in milliseconds (default: from config)
+  --background       Daemonize (run in background)
+  --help, -h         Show this help`;
+
 export async function watchCommand(args: string[]): Promise<void> {
+	if (args.includes("--help") || args.includes("-h")) {
+		process.stdout.write(`${WATCH_HELP}\n`);
+		return;
+	}
+
 	const intervalStr = getFlag(args, "--interval");
 	const background = hasFlag(args, "--background");
 
