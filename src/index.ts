@@ -42,6 +42,52 @@ Options:
 
 Run 'overstory <command> --help' for command-specific help.`;
 
+const COMMANDS = [
+	"init",
+	"sling",
+	"prime",
+	"status",
+	"mail",
+	"merge",
+	"worktree",
+	"log",
+	"watch",
+	"metrics",
+];
+
+function editDistance(a: string, b: string): number {
+	const m = a.length;
+	const n = b.length;
+	// Use a flat 1D array to avoid nested indexing warnings
+	const dp = new Array<number>((m + 1) * (n + 1)).fill(0);
+	const idx = (i: number, j: number) => i * (n + 1) + j;
+	for (let i = 0; i <= m; i++) dp[idx(i, 0)] = i;
+	for (let j = 0; j <= n; j++) dp[idx(0, j)] = j;
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+			const del = (dp[idx(i - 1, j)] ?? 0) + 1;
+			const ins = (dp[idx(i, j - 1)] ?? 0) + 1;
+			const sub = (dp[idx(i - 1, j - 1)] ?? 0) + cost;
+			dp[idx(i, j)] = Math.min(del, ins, sub);
+		}
+	}
+	return dp[idx(m, n)] ?? 0;
+}
+
+function suggestCommand(input: string): string | undefined {
+	let bestMatch: string | undefined;
+	let bestDist = 3; // Only suggest if distance <= 2
+	for (const cmd of COMMANDS) {
+		const dist = editDistance(input, cmd);
+		if (dist < bestDist) {
+			bestDist = dist;
+			bestMatch = cmd;
+		}
+	}
+	return bestMatch;
+}
+
 async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	const command = args[0];
@@ -88,10 +134,15 @@ async function main(): Promise<void> {
 		case "metrics":
 			await metricsCommand(commandArgs);
 			break;
-		default:
+		default: {
 			process.stderr.write(`Unknown command: ${command}\n`);
+			const suggestion = suggestCommand(command);
+			if (suggestion) {
+				process.stderr.write(`Did you mean '${suggestion}'?\n`);
+			}
 			process.stderr.write(`Run 'overstory --help' for usage.\n`);
 			process.exit(1);
+		}
 	}
 }
 
