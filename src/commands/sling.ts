@@ -25,7 +25,7 @@ import { loadConfig } from "../config.ts";
 import { AgentError, ValidationError } from "../errors.ts";
 import type { AgentSession, OverlayConfig } from "../types.ts";
 import { createWorktree } from "../worktree/manager.ts";
-import { createSession, sendKeys } from "../worktree/tmux.ts";
+import { createSession } from "../worktree/tmux.ts";
 
 /**
  * Calculate how many milliseconds to sleep before spawning a new agent,
@@ -305,9 +305,10 @@ export async function slingCommand(args: string[]): Promise<void> {
 		});
 	}
 
-	// 11. Create tmux session running claude
+	// 11. Create tmux session running claude in headless mode (-p)
 	const tmuxSessionName = `overstory-${name}`;
-	const claudeCmd = "claude --dangerously-skip-permissions";
+	const prompt = `Read your assignment in .claude/CLAUDE.md and begin working on task ${taskId}`;
+	const claudeCmd = `claude -p "${prompt}" --dangerously-skip-permissions`;
 	const pid = await createSession(tmuxSessionName, worktreePath, claudeCmd, {
 		OVERSTORY_AGENT_NAME: name,
 	});
@@ -332,17 +333,7 @@ export async function slingCommand(args: string[]): Promise<void> {
 	sessions.push(session);
 	await saveSessions(sessionsPath, sessions);
 
-	// 13. Send initial task prompt to the agent
-	try {
-		await sendKeys(
-			tmuxSessionName,
-			`Read your assignment in .claude/CLAUDE.md and begin working on task ${taskId}`,
-		);
-	} catch {
-		// Non-fatal: agent can still read CLAUDE.md via SessionStart hook
-	}
-
-	// 14. Output result
+	// 13. Output result
 	const output = {
 		agentName: name,
 		capability,
