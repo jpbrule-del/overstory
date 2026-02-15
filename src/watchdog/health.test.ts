@@ -195,6 +195,95 @@ describe("evaluateHealth", () => {
 		expect(check.action).toBe("escalate");
 	});
 
+	// --- Persistent capabilities (coordinator, monitor) ---
+
+	test("persistent capability: coordinator with stale activity → still working, no escalation", () => {
+		const staleActivity = new Date(Date.now() - 60_000).toISOString();
+		const session = makeSession({
+			capability: "coordinator",
+			state: "working",
+			lastActivity: staleActivity,
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("working");
+		expect(check.action).toBe("none");
+	});
+
+	test("persistent capability: coordinator with zombie-level staleness → still working", () => {
+		const oldActivity = new Date(Date.now() - 200_000).toISOString();
+		const session = makeSession({
+			capability: "coordinator",
+			state: "working",
+			lastActivity: oldActivity,
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("working");
+		expect(check.action).toBe("none");
+	});
+
+	test("persistent capability: monitor with stale activity → still working", () => {
+		const staleActivity = new Date(Date.now() - 60_000).toISOString();
+		const session = makeSession({
+			capability: "monitor",
+			state: "working",
+			lastActivity: staleActivity,
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("working");
+		expect(check.action).toBe("none");
+	});
+
+	test("persistent capability: coordinator booting → transitions to working", () => {
+		const session = makeSession({
+			capability: "coordinator",
+			state: "booting",
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("working");
+		expect(check.action).toBe("none");
+	});
+
+	test("persistent capability: coordinator previously stalled → resets to working", () => {
+		const staleActivity = new Date(Date.now() - 60_000).toISOString();
+		const session = makeSession({
+			capability: "coordinator",
+			state: "stalled",
+			lastActivity: staleActivity,
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("working");
+		expect(check.action).toBe("none");
+		expect(check.reconciliationNote).toContain("Persistent capability");
+	});
+
+	test("persistent capability: coordinator with tmux dead → still zombie (ZFC Rule 1 applies)", () => {
+		const session = makeSession({
+			capability: "coordinator",
+			state: "working",
+		});
+		const check = evaluateHealth(session, false, THRESHOLDS);
+
+		expect(check.state).toBe("zombie");
+		expect(check.action).toBe("terminate");
+	});
+
+	test("persistent capability: coordinator with pid dead → still zombie (ZFC Rule 3 applies)", () => {
+		const session = makeSession({
+			capability: "coordinator",
+			state: "working",
+			pid: DEAD_PID,
+		});
+		const check = evaluateHealth(session, true, THRESHOLDS);
+
+		expect(check.state).toBe("zombie");
+		expect(check.action).toBe("terminate");
+	});
+
 	// --- Completed agents ---
 
 	test("completed agents skip monitoring", () => {

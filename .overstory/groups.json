@@ -19,9 +19,9 @@
 			"overstory-ggbi",
 			"overstory-vajl"
 		],
-		"status": "active",
+		"status": "completed",
 		"createdAt": "2026-02-14T03:19:38.077Z",
-		"completedAt": null
+		"completedAt": "2026-02-14T05:48:16.020Z"
 	},
 	{
 		"id": "group-8977d59f",
@@ -32,5 +32,35 @@
 		"status": "active",
 		"createdAt": "2026-02-14T03:56:38.536Z",
 		"completedAt": null
+	},
+	{
+		"id": "group-176f478e",
+		"name": "mulch-expansion",
+		"memberIssueIds": [
+			"overstory-j53z",
+			"overstory-el16",
+			"overstory-95za"
+		],
+		"status": "completed",
+		"createdAt": "2026-02-14T05:51:36.617Z",
+		"completedAt": "2026-02-14T06:41:09.925Z"
+	},
+	{
+		"id": "group-6460c5e8",
+		"name": "p1p2-batch",
+		"memberIssueIds": [
+			"overstory-g2za",
+			"overstory-lu8k",
+			"overstory-aeh4",
+			"overstory-kix0",
+			"overstory-r93n",
+			"overstory-1f9g",
+			"overstory-y9ec",
+			"overstory-q9qk",
+			"overstory-8vf9"
+		],
+		"status": "completed",
+		"createdAt": "2026-02-15T20:17:01.828Z",
+		"completedAt": "2026-02-15T21:13:42.964Z"
 	}
 ]

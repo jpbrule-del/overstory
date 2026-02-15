@@ -27,6 +27,16 @@
 
 import type { AgentSession, AgentState, HealthCheck } from "../types.ts";
 
+/**
+ * Agent capabilities that run as persistent interactive sessions.
+ * These agents are expected to have long idle periods (e.g. coordinator waiting
+ * for worker mail) and should NOT be flagged stale/zombie based on lastActivity.
+ * Only tmux/pid liveness checks apply to them.
+ *
+ * Shared concept with src/commands/log.ts:PERSISTENT_CAPABILITIES.
+ */
+const PERSISTENT_CAPABILITIES = new Set(["coordinator", "monitor"]);
+
 /** Numeric ordering for forward-only state transitions. */
 const STATE_ORDER: Record<AgentState, number> = {
 	booting: 0,
@@ -153,6 +163,24 @@ export function evaluateHealth(
 			state: "zombie",
 			action: "terminate",
 			reconciliationNote: `ZFC: pid ${session.pid} dead but tmux alive — agent process exited, shell survived`,
+		};
+	}
+
+	// Persistent capabilities (coordinator, monitor) are expected to have long idle
+	// periods waiting for mail/events. Skip time-based stale/zombie detection for
+	// them — only tmux/pid liveness matters (checked above).
+	if (PERSISTENT_CAPABILITIES.has(session.capability)) {
+		// Transition booting → working if we reach here (tmux alive, pid alive)
+		const state = session.state === "booting" ? "working" : session.state;
+		return {
+			...base,
+			processAlive: true,
+			state: state === "stalled" ? "working" : state,
+			action: "none",
+			reconciliationNote:
+				session.state === "stalled"
+					? `Persistent capability "${session.capability}" exempted from stale detection — resetting to working`
+					: null,
 		};
 	}
 

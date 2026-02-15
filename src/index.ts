@@ -57,6 +57,7 @@ Commands:
   nudge <agent> [msg]     Send a text nudge to an agent
   group <sub>             Task groups (create/status/add/remove/list)
   clean                   Wipe runtime state (nuclear cleanup)
+  doctor                  Run health checks on overstory setup
   worktree <sub>          Manage worktrees (list/clean)
   log <event>             Log a hook event
   watch                   Start watchdog daemon
@@ -82,6 +83,7 @@ const COMMANDS = [
 	"dashboard",
 	"inspect",
 	"clean",
+	"doctor",
 	"coordinator",
 	"supervisor",
 	"hooks",
@@ -173,6 +175,9 @@ async function main(): Promise<void> {
 			break;
 		case "clean":
 			await cleanCommand(commandArgs);
+			break;
+		case "doctor":
+			await doctorCommand(commandArgs);
 			break;
 		case "coordinator":
 			await coordinatorCommand(commandArgs);
