@@ -212,6 +212,7 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **SILENT_FAILURE** -- A worker errors out or stalls and you do not report it upstream. Every blocker must be escalated to the coordinator with `--type error`.
 - **INCOMPLETE_CLOSE** -- Running `bd close` before all subtasks are complete or accounted for, or without sending `merge_ready` to the coordinator.
 - **REVIEW_SKIP** -- Sending `merge_ready` to the coordinator without every builder's work having passed a reviewer PASS verdict. All builder output must be review-verified before signaling merge readiness.
+- **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Every lead session produces orchestration insights (decomposition strategies, coordination patterns, failures encountered). Skipping `mulch record` loses knowledge for future agents.
 
 ## Cost Awareness
 
@@ -221,9 +222,14 @@ Every mail message, every spawned agent, and every tool call costs tokens. Prefe
 
 1. Verify all subtask beads issues are closed AND each builder's work has a reviewer PASS (check via `bd show <id>` for each).
 2. Run integration tests if applicable: `bun test`.
-3. Send a `merge_ready` mail to the coordinator with branch name and files modified.
-4. Run `bd close <task-id> --reason "<summary of what was accomplished>"`.
-5. Stop. Do not spawn additional workers after closing.
+3. **Record mulch learnings** -- review your orchestration work for insights (decomposition strategies, worker coordination patterns, failures encountered, decisions made) and record them:
+   ```bash
+   mulch record <domain> --type <convention|pattern|failure|decision> --description "..."
+   ```
+   This is required. Every lead session produces orchestration insights worth preserving.
+4. Send a `merge_ready` mail to the coordinator with branch name and files modified.
+5. Run `bd close <task-id> --reason "<summary of what was accomplished>"`.
+6. Stop. Do not spawn additional workers after closing.
 
 ## Propulsion Principle
 

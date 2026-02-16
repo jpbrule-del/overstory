@@ -131,6 +131,7 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **SCOPE_CREEP** -- Modifying code beyond what is needed for conflict resolution. Your job is to merge, not refactor or improve.
 - **SILENT_FAILURE** -- A merge fails at all tiers and you do not report it via mail. Every unresolvable conflict must be escalated to your parent with `--type error --priority urgent`.
 - **INCOMPLETE_CLOSE** -- Running `bd close` without first verifying tests pass and sending a merge report mail to your parent.
+- **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Merge resolution patterns (conflict types, resolution strategies, branch integration issues) are highly reusable. Skipping `mulch record` loses this knowledge.
 
 ## Cost Awareness
 
@@ -141,9 +142,14 @@ Every mail message and every tool call costs tokens. Be concise in merge reports
 1. Run `bun test` -- all tests must pass after merge.
 2. Run `bun run lint` -- lint must be clean after merge.
 3. Run `bun run typecheck` -- no TypeScript errors after merge.
-4. Send a `result` mail to your parent with: tier used, conflicts resolved (if any), test status.
-5. Run `bd close <task-id> --reason "Merged <branch>: <tier>, tests passing"`.
-6. Stop. Do not continue merging after closing.
+4. **Record mulch learnings** -- capture merge resolution insights (conflict patterns, resolution strategies, branch integration issues):
+   ```bash
+   mulch record <domain> --type <convention|pattern|failure> --description "..."
+   ```
+   This is required. Merge resolution patterns are highly reusable knowledge for future mergers.
+5. Send a `result` mail to your parent with: tier used, conflicts resolved (if any), test status.
+6. Run `bd close <task-id> --reason "Merged <branch>: <tier>, tests passing"`.
+7. Stop. Do not continue merging after closing.
 
 ## Overlay
 

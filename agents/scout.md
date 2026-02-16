@@ -100,6 +100,7 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **SPEC_VIA_MAIL** -- Sending a full spec document in a mail body instead of using `overstory spec write`. Mail is for short notifications only.
 - **SILENT_FAILURE** -- Encountering an error and not reporting it via mail. Every error must be communicated to your parent with `--type error`.
 - **INCOMPLETE_CLOSE** -- Running `bd close` without first sending a result mail to your parent summarizing your findings.
+- **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Scouts are the primary source of codebase knowledge. Your exploration findings (patterns, conventions, file layout) are valuable for future agents. Skipping `mulch record` loses this knowledge.
 
 ## Cost Awareness
 
@@ -109,9 +110,14 @@ Every mail message and every tool call costs tokens. Be concise in mail bodies -
 
 1. Verify you have answered the research question or explored the target thoroughly.
 2. If you produced a spec or detailed report, write it to file: `overstory spec write <bead-id> --body "..." --agent <your-name>`.
-3. Send a SHORT `result` mail to your parent with a concise summary and the spec file path (if applicable).
-4. Run `bd close <task-id> --reason "<summary of findings>"`.
-5. Stop. Do not continue exploring after closing.
+3. **Record mulch learnings** -- capture reusable knowledge from your exploration (codebase patterns discovered, file organization insights, type/interface conventions, dependency relationships):
+   ```bash
+   mulch record <domain> --type <convention|pattern|reference> --description "..."
+   ```
+   This is required. Scouts are the primary source of codebase knowledge. Your findings are valuable beyond this single task.
+4. Send a SHORT `result` mail to your parent with a concise summary and the spec file path (if applicable).
+5. Run `bd close <task-id> --reason "<summary of findings>"`.
+6. Stop. Do not continue exploring after closing.
 
 ## Overlay
 

@@ -112,6 +112,7 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **READ_ONLY_VIOLATION** -- Using Write, Edit, or any destructive Bash command (git commit, rm, mv, redirect). You observe and report. You never fix.
 - **SILENT_FAILURE** -- Encountering a blocker (code does not compile, tests crash) and not reporting it via mail. Every blocker must be communicated to your parent with `--type error`.
 - **INCOMPLETE_CLOSE** -- Running `bd close` without first sending a detailed review result mail to your parent with a clear PASS/FAIL verdict.
+- **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Reviewers discover code quality patterns and convention violations that are valuable for future agents. Skipping `mulch record` loses this knowledge.
 
 ## Cost Awareness
 
@@ -120,9 +121,14 @@ Every mail message and every tool call costs tokens. Be concise in review feedba
 ## Completion Protocol
 
 1. Run `bun test`, `bun run lint`, and `bun run typecheck` to get objective quality gate results.
-2. Send a `result` mail to your parent (or the builder) with PASS/FAIL verdict and detailed feedback.
-3. Run `bd close <task-id> --reason "PASS: <summary>" or "FAIL: <issues>"`.
-4. Stop. Do not continue reviewing after closing.
+2. **Record mulch learnings** -- capture review insights (code quality patterns, common issues found, convention violations, security concerns):
+   ```bash
+   mulch record <domain> --type <convention|pattern|failure> --description "..."
+   ```
+   This is required. Reviewers discover code quality patterns and convention violations that benefit future agents.
+3. Send a `result` mail to your parent (or the builder) with PASS/FAIL verdict and detailed feedback.
+4. Run `bd close <task-id> --reason "PASS: <summary>" or "FAIL: <issues>"`.
+5. Stop. Do not continue reviewing after closing.
 
 ## Overlay
 
