@@ -266,7 +266,9 @@ async function captureStdout(fn: () => Promise<void>): Promise<string> {
 	return chunks.join("");
 }
 
-/** Build default CoordinatorDeps with fake tmux. */
+/** Build default CoordinatorDeps with fake tmux, watchdog, and monitor.
+ * Always injects fakes for all three to prevent real Bun.spawn(["overstory", ...])
+ * calls in tests (overstory CLI is not available in CI). */
 function makeDeps(
 	sessionAliveMap: Record<string, boolean> = {},
 	watchdogConfig?: { running?: boolean; startSuccess?: boolean; stopSuccess?: boolean },
@@ -274,33 +276,26 @@ function makeDeps(
 ): {
 	deps: CoordinatorDeps;
 	calls: TmuxCallTracker;
-	watchdogCalls?: WatchdogCallTracker;
-	monitorCalls?: MonitorCallTracker;
+	watchdogCalls: WatchdogCallTracker;
+	monitorCalls: MonitorCallTracker;
 } {
 	const { tmux, calls } = makeFakeTmux(sessionAliveMap);
-	const deps: CoordinatorDeps = { _tmux: tmux };
-	let watchdogCalls: WatchdogCallTracker | undefined;
-	let monitorCalls: MonitorCallTracker | undefined;
+	const { watchdog, calls: watchdogCalls } = makeFakeWatchdog(
+		watchdogConfig?.running,
+		watchdogConfig?.startSuccess,
+		watchdogConfig?.stopSuccess,
+	);
+	const { monitor, calls: monitorCalls } = makeFakeMonitor(
+		monitorConfig?.running,
+		monitorConfig?.startSuccess,
+		monitorConfig?.stopSuccess,
+	);
 
-	if (watchdogConfig) {
-		const { watchdog, calls: wdCalls } = makeFakeWatchdog(
-			watchdogConfig.running,
-			watchdogConfig.startSuccess,
-			watchdogConfig.stopSuccess,
-		);
-		deps._watchdog = watchdog;
-		watchdogCalls = wdCalls;
-	}
-
-	if (monitorConfig) {
-		const { monitor, calls: monCalls } = makeFakeMonitor(
-			monitorConfig.running,
-			monitorConfig.startSuccess,
-			monitorConfig.stopSuccess,
-		);
-		deps._monitor = monitor;
-		monitorCalls = monCalls;
-	}
+	const deps: CoordinatorDeps = {
+		_tmux: tmux,
+		_watchdog: watchdog,
+		_monitor: monitor,
+	};
 
 	return {
 		deps,
