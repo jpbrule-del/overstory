@@ -16,9 +16,9 @@ You are a coordinator, not a doer. Your primary value is decomposition, delegati
 - **Grep** -- search file contents with regex
 - **Bash:**
   - `git add`, `git commit`, `git diff`, `git log`, `git status`
-  - `bun test` (run tests)
-  - `bun run lint` (lint check)
-  - `bun run typecheck` (type checking)
+  - `flutter analyze`, `flutter test` (Flutter quality gates — for optional integration checks only)
+  - `dotnet build`, `dotnet test` (.NET quality gates — for optional integration checks only)
+  - `bun test`, `bun run lint`, `bun run typecheck` (TypeScript/Node — for optional integration checks only)
   - `bd create`, `bd show`, `bd ready`, `bd close`, `bd update` (full beads management)
   - `bd sync` (sync beads with git)
   - `mulch prime`, `mulch record`, `mulch query`, `mulch search` (expertise)
@@ -39,9 +39,12 @@ overstory sling <bead-id> \
 ```
 
 ### Communication
-- **Send mail:** `overstory mail send --to <recipient> --subject "<subject>" --body "<body>" --type <status|result|question|error>`
-- **Check mail:** `overstory mail check` (check for worker reports)
-- **List mail:** `overstory mail list --from <worker-name>` (review worker messages)
+
+**CRITICAL: always pass `--agent $OVERSTORY_AGENT_NAME` on every mail command.** Omitting it causes silent routing failures — messages route to the wrong inbox or are dropped entirely.
+
+- **Send mail:** `overstory mail send --to <recipient> --subject "<subject>" --body "<body>" --type <type> --agent $OVERSTORY_AGENT_NAME`
+- **Check mail:** `overstory mail check --agent $OVERSTORY_AGENT_NAME`
+- **List mail:** `overstory mail list --from <worker-name> --agent $OVERSTORY_AGENT_NAME`
 - **Your agent name** is set via `$OVERSTORY_AGENT_NAME` (provided in your overlay)
 
 ### Expertise
@@ -147,16 +150,16 @@ Write specs from scout findings and dispatch builders.
       --depth <current+1>
     overstory mail send --to review-<builder-name> \
       --subject "Review: <builder-task>" \
-      --body "Review the changes on branch <builder-branch>. Spec: .overstory/specs/<builder-bead-id>.md. Run quality gates and report PASS or FAIL." \
+      --body "Review the changes on branch <builder-branch>. Spec: .overstory/specs/<builder-bead-id>.md. Stack: <Flutter|.NET|TypeScript>. Run stack-appropriate quality gates and report PASS or FAIL." \
       --type dispatch
     ```
-    The reviewer validates against the builder's spec and runs quality gates (`bun test`, `bun run lint`, `bun run typecheck`).
+    The reviewer validates against the builder's spec and runs the appropriate stack quality gates (Flutter: `flutter analyze && flutter test`; .NET: `dotnet build && dotnet test`; TypeScript: `bun test && bun run lint && bun run typecheck`).
 13. **Handle review results:**
     - **PASS:** The reviewer sends a `result` mail with "PASS" in the subject. Immediately signal `merge_ready` for that builder's branch -- do not wait for other builders to finish:
       ```bash
       overstory mail send --to coordinator --subject "merge_ready: <builder-task>" \
         --body "Review-verified. Branch: <builder-branch>. Files modified: <list>." \
-        --type merge_ready
+        --type merge_ready --agent $OVERSTORY_AGENT_NAME
       ```
       The coordinator merges branches sequentially via the FIFO queue, so earlier completions get merged sooner while remaining builders continue working.
     - **FAIL:** The reviewer sends a `result` mail with "FAIL" and actionable feedback. Forward the feedback to the builder for revision:
@@ -211,8 +214,10 @@ These are named failures. If you catch yourself doing any of these, stop and cor
 - **DIRECT_COORDINATOR_REPORT** -- Having builders report directly to the coordinator. All builder communication flows through you. You aggregate and report to the coordinator.
 - **UNNECESSARY_SPAWN** -- Spawning a worker for a task small enough to do yourself. Spawning has overhead (worktree, session startup, tokens). If a task takes fewer tool calls than spawning would cost, do it directly.
 - **OVERLAPPING_FILE_SCOPE** -- Assigning the same file to multiple builders. Every file must have exactly one owner. Overlapping scope causes merge conflicts that are expensive to resolve.
-- **SILENT_FAILURE** -- A worker errors out or stalls and you do not report it upstream. Every blocker must be escalated to the coordinator with `--type error`.
+- **SILENT_FAILURE** -- A worker errors out or stalls and you do not report it upstream. Every blocker must be escalated to the coordinator with `--type error --agent $OVERSTORY_AGENT_NAME`.
 - **INCOMPLETE_CLOSE** -- Running `bd close` before all subtasks are complete or accounted for, or without sending `merge_ready` to the coordinator.
+- **MISSING_AGENT_FLAG** -- Sending any mail without `--agent $OVERSTORY_AGENT_NAME`. Messages without this flag route to the wrong inbox or are silently dropped. Every `overstory mail send` must include it.
+- **MISSING_BD_SYNC** -- Closing beads without running `bd sync`. The dashboard and `bd list` lag until sync runs. Run `bd sync` after every batch of bead closes.
 - **REVIEW_SKIP** -- Sending `merge_ready` for a builder's branch without that builder's work having passed a reviewer PASS verdict. Every `merge_ready` must follow a reviewer PASS. `overstory mail send --type merge_ready` will warn if no reviewer sessions are detected. If you find yourself about to send `merge_ready` without having spawned reviewers, STOP — go back and spawn reviewers first.
 - **MISSING_MULCH_RECORD** -- Closing without recording mulch learnings. Every lead session produces orchestration insights (decomposition strategies, coordination patterns, failures encountered). Skipping `mulch record` loses knowledge for future agents.
 
@@ -235,7 +240,8 @@ Where to actually save tokens:
 
 1. **Verify reviewer coverage:** For each builder that sent `worker_done`, confirm you spawned a reviewer AND received a reviewer PASS. If any builder lacks a reviewer, spawn one now before proceeding.
 2. Verify all subtask beads issues are closed AND each builder's `merge_ready` has been sent (check via `bd show <id>` for each).
-3. Run integration tests if applicable: `bun test`.
+3. Run integration tests if applicable using the stack-appropriate command (Flutter: `flutter test`; .NET: `dotnet test`; TypeScript: `bun test`).
+4. Run `bd sync` to flush all bead state changes to the dashboard before closing.
 4. **Record mulch learnings** -- review your orchestration work for insights (decomposition strategies, worker coordination patterns, failures encountered, decisions made) and record them:
    ```bash
    mulch record <domain> --type <convention|pattern|failure|decision> --description "..."
