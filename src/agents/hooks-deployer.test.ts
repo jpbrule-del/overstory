@@ -620,6 +620,41 @@ describe("getCapabilityGuards", () => {
 		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 1);
 	});
 
+	test("returns 14 guards for tester (10 team + 3 tool blocks + 1 bash file guard)", () => {
+		const guards = getCapabilityGuards("tester");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 4);
+	});
+
+	test("returns 14 guards for security (10 team + 3 tool blocks + 1 bash file guard)", () => {
+		const guards = getCapabilityGuards("security");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 4);
+	});
+
+	test("returns 14 guards for qa (10 team + 3 tool blocks + 1 bash file guard)", () => {
+		const guards = getCapabilityGuards("qa");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 4);
+	});
+
+	test("returns 11 guards for analyst (10 team + 1 bash path boundary)", () => {
+		const guards = getCapabilityGuards("analyst");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 1);
+	});
+
+	test("returns 11 guards for pm (10 team + 1 bash path boundary)", () => {
+		const guards = getCapabilityGuards("pm");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 1);
+	});
+
+	test("returns 11 guards for architect (10 team + 1 bash path boundary)", () => {
+		const guards = getCapabilityGuards("architect");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 1);
+	});
+
+	test("returns 11 guards for scrummaster (10 team + 1 bash path boundary)", () => {
+		const guards = getCapabilityGuards("scrummaster");
+		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT + 1);
+	});
+
 	test("returns 10 guards for unknown capability (10 team tool blocks only)", () => {
 		const guards = getCapabilityGuards("unknown");
 		expect(guards.length).toBe(NATIVE_TEAM_TOOL_COUNT);
@@ -698,6 +733,13 @@ describe("getCapabilityGuards", () => {
 			"supervisor",
 			"builder",
 			"merger",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
 		]) {
 			const guards = getCapabilityGuards(cap);
 			const taskGuard = guards.find((g) => g.matcher === "Task");
@@ -715,6 +757,13 @@ describe("getCapabilityGuards", () => {
 			"supervisor",
 			"builder",
 			"merger",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
 		]) {
 			const guards = getCapabilityGuards(cap);
 			const matchers = guards.map((g) => g.matcher);
@@ -797,7 +846,20 @@ describe("getDangerGuards", () => {
 	});
 
 	test("all capabilities get Bash danger guards in deployed hooks", async () => {
-		const capabilities = ["builder", "scout", "reviewer", "lead", "merger"];
+		const capabilities = [
+			"builder",
+			"scout",
+			"reviewer",
+			"lead",
+			"merger",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
+		];
 		const tempDir = await import("node:fs/promises").then((fs) =>
 			fs.mkdtemp(join(require("node:os").tmpdir(), "overstory-danger-test-")),
 		);
@@ -1095,6 +1157,13 @@ describe("structural enforcement integration", () => {
 			"merger",
 			"coordinator",
 			"supervisor",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
 		];
 
 		for (const cap of capabilities) {
@@ -1249,6 +1318,13 @@ describe("structural enforcement integration", () => {
 			"merger",
 			"coordinator",
 			"supervisor",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
 		];
 
 		for (const cap of capabilities) {
@@ -1274,6 +1350,13 @@ describe("structural enforcement integration", () => {
 			"merger",
 			"coordinator",
 			"supervisor",
+			"analyst",
+			"pm",
+			"architect",
+			"scrummaster",
+			"tester",
+			"security",
+			"qa",
 		];
 
 		for (const cap of capabilities) {
