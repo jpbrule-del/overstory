@@ -90,6 +90,15 @@ export const SUPPORTED_CAPABILITIES = [
 	"coordinator",
 	"supervisor",
 	"monitor",
+	// BMAD Planning roles
+	"analyst",
+	"pm",
+	"architect",
+	"scrummaster",
+	// Testing/QA roles
+	"tester",
+	"security",
+	"qa",
 ] as const;
 
 /** Union type derived from the capabilities constant. */

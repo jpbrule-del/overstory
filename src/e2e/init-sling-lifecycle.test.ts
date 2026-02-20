@@ -20,14 +20,21 @@ import type { OverlayConfig } from "../types.ts";
  */
 
 const EXPECTED_AGENT_DEFS = [
+	"analyst.md",
+	"architect.md",
 	"builder.md",
 	"coordinator.md",
 	"lead.md",
 	"merger.md",
 	"monitor.md",
+	"pm.md",
+	"qa.md",
 	"reviewer.md",
 	"scout.md",
+	"scrummaster.md",
+	"security.md",
 	"supervisor.md",
+	"tester.md",
 ];
 
 describe("E2E: init→sling lifecycle on external project", () => {
@@ -77,7 +84,7 @@ describe("E2E: init→sling lifecycle on external project", () => {
 		const gitignoreFile = Bun.file(join(overstoryDir, ".gitignore"));
 		expect(await gitignoreFile.exists()).toBe(true);
 
-		// agent-defs/ contains all 8 agent definition files
+		// agent-defs/ contains all 15 agent definition files
 		const agentDefsDir = join(overstoryDir, "agent-defs");
 		const agentDefFiles = (await readdir(agentDefsDir)).filter((f) => f.endsWith(".md")).sort();
 		expect(agentDefFiles).toEqual(EXPECTED_AGENT_DEFS);
@@ -109,7 +116,7 @@ describe("E2E: init→sling lifecycle on external project", () => {
 		expect(config.project.name).toBeTruthy();
 	});
 
-	test("manifest loads successfully with all 8 agents", async () => {
+	test("manifest loads successfully with all 15 agents", async () => {
 		await initCommand([]);
 
 		const manifestPath = join(tempDir, ".overstory", "agent-manifest.json");
@@ -118,17 +125,24 @@ describe("E2E: init→sling lifecycle on external project", () => {
 
 		const manifest = await loader.load();
 
-		// All 8 agents present
+		// All 15 agents present
 		const agentNames = Object.keys(manifest.agents).sort();
 		expect(agentNames).toEqual([
+			"analyst",
+			"architect",
 			"builder",
 			"coordinator",
 			"lead",
 			"merger",
 			"monitor",
+			"pm",
+			"qa",
 			"reviewer",
 			"scout",
+			"scrummaster",
+			"security",
 			"supervisor",
+			"tester",
 		]);
 
 		// Each agent has a valid file reference

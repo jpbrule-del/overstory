@@ -242,6 +242,64 @@ function buildAgentManifest(): AgentManifest {
 			canSpawn: false,
 			constraints: ["read-only", "no-worktree"],
 		},
+		// BMAD Planning roles
+		analyst: {
+			file: "analyst.md",
+			model: "haiku",
+			tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+			capabilities: ["analyze", "research"],
+			canSpawn: false,
+			constraints: ["docs-only"],
+		},
+		pm: {
+			file: "pm.md",
+			model: "sonnet",
+			tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+			capabilities: ["requirements", "product"],
+			canSpawn: false,
+			constraints: ["docs-only"],
+		},
+		architect: {
+			file: "architect.md",
+			model: "opus",
+			tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+			capabilities: ["architecture", "design"],
+			canSpawn: false,
+			constraints: ["docs-only"],
+		},
+		scrummaster: {
+			file: "scrummaster.md",
+			model: "sonnet",
+			tools: ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
+			capabilities: ["planning", "decompose"],
+			canSpawn: false,
+			constraints: ["docs-only"],
+		},
+		// Testing/QA roles
+		tester: {
+			file: "tester.md",
+			model: "sonnet",
+			tools: ["Read", "Glob", "Grep", "Bash"],
+			capabilities: ["test", "validate"],
+			canSpawn: false,
+			constraints: ["read-only"],
+		},
+		security: {
+			file: "security.md",
+			model: "sonnet",
+			tools: ["Read", "Glob", "Grep", "Bash"],
+			capabilities: ["security-audit", "scan"],
+			canSpawn: false,
+			constraints: ["read-only"],
+		},
+		qa: {
+			file: "qa.md",
+			model: "sonnet",
+			tools: ["Read", "Glob", "Grep", "Bash"],
+			capabilities: ["qa", "acceptance"],
+			canSpawn: false,
+			constraints: ["read-only"],
+		},
 	};
 
 	// Build capability index: map each capability to agent names that declare it

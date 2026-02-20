@@ -14,6 +14,10 @@ const NON_IMPLEMENTATION_CAPABILITIES = new Set([
 	"coordinator",
 	"supervisor",
 	"monitor",
+	// Testing/QA roles (read-only: run tests and report, never modify code)
+	"tester",
+	"security",
+	"qa",
 ]);
 
 /**
@@ -321,7 +325,15 @@ export function buildBashFileGuardScript(
  * Capabilities that are allowed to modify files via Bash commands.
  * These get the Bash path boundary guard instead of a blanket file-modification block.
  */
-const IMPLEMENTATION_CAPABILITIES = new Set(["builder", "merger"]);
+const IMPLEMENTATION_CAPABILITIES = new Set([
+	"builder",
+	"merger",
+	// BMAD doc-writing roles (write to docs/planning/ and docs/stories/ only)
+	"analyst",
+	"pm",
+	"architect",
+	"scrummaster",
+]);
 
 /**
  * Bash patterns that modify files and require path boundary validation.
